@@ -1,44 +1,47 @@
 import asyncio
-import sys
+import websockets
+import datetime as dt
+import json
 
-# interruption flag for other tasks 
-interrupt_flag = False
 
-async def read_input():
-    loop = asyncio.get_event_loop()
-    reader = asyncio.StreamReader()
-    # Создаем поток для чтения из stdin
-    protocol = asyncio.StreamReaderProtocol(reader)
-    await loop.connect_read_pipe(lambda: protocol, sys.stdin)
+ws_url = "wss://wbs.mexc.com/ws"
 
-    global interrupt_flag
-    while True:
-        # Читаем строку из stdin
-        line = await reader.readline()
-        if not line:
-            interrupt_flag = True  # Прерывание выполнения из других задач
-            break  # Если EOF, выходим из цикла
-        message = line.decode().strip()
-        print(f"Entered message: {message}")
-        # Здесь можно добавить логику для прерывания выполнения
-        if message == "stop":
-            interrupt_flag = True  # Прерывание выполнения из других задач
+async def ws_connection():
+    
+    async with websockets.connect(ws_url) as ws:
+        print("Connected: " + dt.datetime.now().isoformat())
 
-async def perform_other_tasks():
-    global interrupt_flag
-    while True:
-        if interrupt_flag:
-            print("Stopping execution...")  # Здесь можно добавить логику для прерывания выполнения
-            interrupt_flag = False
-            return
-        print("Performing other tasks...")
-        await asyncio.sleep(5)  # Имитация длительной работы
+        symbol = "XODEXUSDT"
+        subscribe = {
+                "method": "SUBSCRIPTION",
+                "params": [
+                    f"spot@public.deals.v3.api@{symbol}"
+                ]
+        }
+        await ws.send(json.dumps(subscribe))
 
-async def main():
-    listener_task = asyncio.create_task(read_input())
-    other_tasks_task = asyncio.create_task(perform_other_tasks())
+        async for msg in ws:
+            print(msg)
+        
+        # await ws.send()
+    print("Disconnected: " + dt.datetime.now().isoformat())
 
-    await asyncio.gather(listener_task, other_tasks_task)
+# Name	Type	Description
+# deals	array	dealsInfo
+# > S	int	    tradeType 1:buy 2:sell
+# > p	string	price
+# > t	long	dealTime
+# > v	string	quantity
+# e	    string	eventType
+# s	    string	symbol
+# t	    long	eventTime
+def parse_deals_msg(msg):
+    msg = json.loads(msg)
+
+
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    print("Hello")
+    asyncio.run(ws_connection())
+    # asyncio.get_event_loop().run_until_complete(listen_trades())
+
